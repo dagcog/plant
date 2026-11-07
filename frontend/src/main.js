@@ -7,6 +7,7 @@ import { createWorld } from './render/world.js';
 import { inspectPlant } from './render/inspection.js';
 import { icon } from './ui/icons.js';
 import { plantArt } from './ui/illustrations.js';
+import { accountControl, accountDialog } from './ui/account.js';
 import * as ui from './ui/views.js';
 
 const $ = (id) => document.getElementById(id);
@@ -17,6 +18,8 @@ const store = createApiStore();
 const previousMarkup = new WeakMap();
 const markerPositions = new Map();
 let state;
+let account = null;
+let authBusy = false;
 let syncing = false;
 let view = 'garden';
 let selected = SLOTS[0].id;
@@ -103,6 +106,7 @@ function renderPanel() {
 function render() {
   fill($('navigation'), ui.navigation(view));
   fill($('intro'), ui.intro(view, state));
+  fill($('account-control'), accountControl(account));
   fill($('currency'), `<span class="currency-icon">${icon('leaf', 16)}</span><strong>${state.coins}</strong><span class="currency-label">叶币</span>`);
   $('garden').hidden = view !== 'garden';
   $('collection').hidden = view === 'garden';
@@ -128,9 +132,7 @@ async function commit(action) {
   if (!action) syncing = true;
   try {
     const result = await store.run(action);
-    state = result.state;
-    $('status').hidden = true;
-    render();
+    showGardenResult(result);
     toast(result.message);
     return result;
   } catch (error) {
@@ -141,6 +143,13 @@ async function commit(action) {
     }
     return null;
   } finally { if (!action) syncing = false; }
+}
+
+function showGardenResult(result) {
+  state = result.state;
+  account = result.account;
+  $('status').hidden = true;
+  render();
 }
 
 function setView(next) {
@@ -190,6 +199,44 @@ function openDialog(type, html) {
   dialog.dataset.type = type;
   fill(dialog, html);
   if (!dialog.open) dialog.showModal();
+}
+
+function openAccount(mode = 'login') {
+  const username = $('account-username')?.value;
+  openDialog('account', accountDialog(account, mode));
+  const field = $('account-username');
+  if (field) {
+    if (username) field.value = username;
+    field.focus();
+  }
+}
+
+function accountFeedback(message) {
+  const feedback = $('account-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.hidden = false;
+}
+
+async function authenticate(mode, fields, control) {
+  if (authBusy) return;
+  authBusy = true;
+  control.disabled = true;
+  $('account-feedback').hidden = true;
+  try {
+    const result = await store.authenticate(mode, fields);
+    if (modalType === 'account') closeDialog();
+    showGardenResult(result);
+    if (view === 'visit') await parseLocation();
+    toast(mode === 'logout' ? '已退出登录。' : mode === 'register' ? '注册成功，窗台已绑定到账号。' : '登录成功。');
+  } catch (error) {
+    const message = error.status && error.status < 500 ? error.message : '暂时无法连接花园服务，请重试。';
+    if (modalType === 'account') accountFeedback(message);
+    else toast(message);
+  } finally {
+    authBusy = false;
+    control.disabled = false;
+  }
 }
 
 function shopMarkup() {
@@ -261,6 +308,20 @@ dialog.addEventListener('change', (event) => {
   if (event.target.id === 'shop-slot' && draft) draft.slot = event.target.value;
 });
 
+dialog.addEventListener('submit', (event) => {
+  if (event.target.id !== 'account-form') return;
+  event.preventDefault();
+  const form = event.target;
+  const mode = form.dataset.mode;
+  const { username, password, confirm } = Object.fromEntries(new FormData(form));
+  if (mode === 'register' && confirm !== password) {
+    accountFeedback('两次输入的密码不一致。');
+    $('account-confirm').focus();
+    return;
+  }
+  void authenticate(mode, { username, password }, form.querySelector('button[type="submit"]'));
+});
+
 document.addEventListener('click', async (event) => {
   const control = event.target.closest('[data-action]');
   if (!control || control.disabled || (dialog.open && !dialog.contains(control))) return;
@@ -274,6 +335,9 @@ document.addEventListener('click', async (event) => {
   const expectedId = data.plant;
 
   switch (action) {
+    case 'account': if (!authBusy) openAccount(); break;
+    case 'auth-mode': if (!authBusy) openAccount(data.mode); break;
+    case 'logout': await authenticate('logout', {}, control); break;
     case 'view': setView(data.view); break;
     case 'select': selected = slot; render(); break;
     case 'shop': openShop(slot); break;

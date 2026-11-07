@@ -28,12 +28,19 @@ export function createApiStore() {
     }
   }
 
+  function enqueue(run) {
+    const result = queue.then(run);
+    queue = result.catch((error) => { if (error.status === 401) hasSession = false; });
+    return result;
+  }
+
   return {
-    run(action) {
-      const result = queue.then(() => transact(action));
-      queue = result.catch((error) => { if (error.status === 401) hasSession = false; });
-      return result;
-    },
+    run: (action) => enqueue(() => transact(action)),
+    authenticate: (mode, fields = {}) => enqueue(async () => {
+      await call(`/auth/${mode}`, { method: 'POST', body: fields });
+      hasSession = mode !== 'logout';
+      return transact();
+    }),
   };
 }
 

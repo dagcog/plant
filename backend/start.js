@@ -1,4 +1,5 @@
 import { openDatabase, migrate } from './database.js';
+import { createAuthService } from './auth-service.js';
 import { createGameService } from './game-service.js';
 import { createShelfService } from './shelf-service.js';
 import { createApi } from './http.js';
@@ -12,13 +13,15 @@ try {
     console.log('窗边小事数据库迁移完成');
     await database.close();
   } else {
-    await database.query('SELECT displayed_at FROM windowsill.plants LIMIT 0');
+    await database.query('SELECT token_digest FROM windowsill.account_sessions LIMIT 0');
     const fastForward = !production && process.env.PLANT_FAST_FORWARD !== '0';
     const port = Number(process.env.PLANT_API_PORT ?? 3001);
     const host = process.env.PLANT_API_HOST ?? '127.0.0.1';
     const localOrigins = ['localhost', '127.0.0.1'].flatMap((name) => [5173, 4173].map((frontPort) => `http://${name}:${frontPort}`));
     const origins = new Set((process.env.PLANT_FRONTEND_ORIGINS ?? (production ? '' : localOrigins.join(','))).split(',').map((value) => value.trim()).filter(Boolean));
-    const server = createApi({ games: createGameService(database, { fastForward }), shelves: createShelfService(database), origins, secureCookie: production });
+    const server = createApi({ auth: createAuthService(database), games: createGameService(database, { fastForward }),
+      shelves: createShelfService(database), origins, secureCookie: production,
+      trustLoopbackProxy: process.env.PLANT_TRUST_LOOPBACK_PROXY === '1' });
     await new Promise((resolve, reject) => {
       server.once('error', reject);
       server.listen(port, host, resolve);

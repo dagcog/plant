@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { migrate, openDatabase } from '../backend/database.js';
+import { createAuthService } from '../backend/auth-service.js';
 import { createGameService } from '../backend/game-service.js';
 import { createShelfService } from '../backend/shelf-service.js';
 import { salePrice } from '../shared/simulation.js';
@@ -18,13 +19,14 @@ test('联机成长、交易幂等与花架权限使用关系数据库', async ()
     await migrate(database);
     await migrate(database);
     let now = startedAt;
+    const auth = createAuthService(database, { clock: () => now });
     const games = createGameService(database, { fastForward: true, clock: () => now });
     const shelves = createShelfService(database);
-    const session = await games.session();
-    assert.equal((await games.session(session.token)).created, false);
-    assert.equal(await games.playerFor('forged'), null);
-    const owner = await games.playerFor(session.token);
-    const visitor = await games.playerFor((await games.session()).token);
+    const session = await auth.ensure({});
+    assert.equal((await auth.ensure({ guest: session.token })).created, false);
+    assert.equal(await auth.resolveSession({ guest: 'forged' }), null);
+    const owner = session.playerId;
+    const visitor = (await auth.ensure({})).playerId;
     const { state: initial } = await games.game(owner);
     const plant = initial.slots.left.plant.id;
     assert.equal(initial.coins, 86);
@@ -72,7 +74,7 @@ test('联机成长、交易幂等与花架权限使用关系数据库', async ()
   } finally { await database.close(); }
 });
 
-test('接入已手动初始化的数据库，并在服务重开后恢复访客存档', async () => {
+test('接入已手动初始化的数据库，并在服务重开后登录恢复存档', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'windowsill-db-'));
   let database;
   try {
@@ -82,16 +84,20 @@ test('接入已手动初始化的数据库，并在服务重开后恢复访客�
       await database.transaction((tx) => tx.exec(sql.replace(/^\s*BEGIN;\s*/, '').replace(/\s*COMMIT;\s*$/, '')));
     }
     await migrate(database);
+    const auth = createAuthService(database, { clock: () => startedAt });
     const games = createGameService(database, { clock: () => startedAt });
-    const { token } = await games.session();
-    const player = await games.playerFor(token);
+    const { token, playerId: player } = await auth.ensure({});
     const { state } = await submit(games, player, { type: 'unlock', slot: 'right' });
+    const fields = { username: 'garden_reopen', password: 'Spring garden at dusk' };
+    await auth.register(fields, { guest: token });
     await database.close();
     database = null;
     database = await openDatabase({ url: '', directory });
     await migrate(database);
     const restarted = createGameService(database, { clock: () => startedAt });
-    assert.equal(await restarted.playerFor(token), player);
+    const resumedAuth = createAuthService(database, { clock: () => startedAt });
+    const member = await resumedAuth.login(fields, {});
+    assert.equal((await resumedAuth.resolveSession({ member: member.token })).playerId, player);
     const { state: restored } = await restarted.game(player);
     assert.equal(restored.gardenId, state.gardenId);
     assert.equal(restored.coins, 48);

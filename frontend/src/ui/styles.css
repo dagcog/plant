@@ -40,6 +40,9 @@ p { color: var(--muted); line-height: 1.65; }
 .nav-button { display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; background: transparent; padding: 10px 15px; border-radius: 10px; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .nav-button:hover { background: #eeeee2; color: var(--ink); }
 .nav-button[aria-current] { color: var(--green-dark); background: var(--sage); font-weight: 700; }
+.header-tools { justify-self: end; display: flex; align-items: center; gap: 8px; }
+.header-tools .account-button { display: inline-block; vertical-align: middle; max-width: 138px; min-height: 36px; padding: 7px 9px; overflow: hidden; text-overflow: ellipsis; }
+.account-button svg { margin-right: 5px; vertical-align: middle; }
 .currency { justify-self: end; display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 5px 11px 5px 6px; border: 1px solid #e7dec9; border-radius: 999px; background: #fbf4e3; font-variant-numeric: tabular-nums; }
 .currency-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #916327; background: #eee0bd; }
 .currency-label { color: #80663e; font-size: 11px; }
@@ -190,7 +193,14 @@ button.specimen-art:hover .plant-art { transform: scale(1.04); }
 
 dialog { width: min(660px, calc(100% - 28px)); padding: 0; max-height: calc(100% - 24px); overflow: auto; border: 1px solid #ded9c7; border-radius: 18px; background: var(--card); color: var(--ink); box-shadow: 0 25px 90px #2d2e2350; }
 dialog::backdrop { background: #33372a6b; backdrop-filter: blur(3px); }
-dialog[data-type=confirm], dialog[data-type=share] { max-width: 470px; }
+dialog[data-type=confirm], dialog[data-type=share], dialog[data-type=account] { max-width: 470px; }
+.account-modes { display: flex; gap: 7px; padding: 0 22px 11px; }
+.account-modes button[aria-pressed=true] { background: var(--sage); border-color: #7c9675; }
+.account-fields { display: grid; gap: 6px; padding: 0 22px 18px; }
+.account-fields label { margin-top: 4px; font-size: 13px; font-weight: 650; }
+.account-fields input { width: 100%; min-height: 38px; padding: 7px 9px; background: #fffdf6; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); }
+.account-fields small { color: var(--muted); }
+.account-feedback { padding: 7px 9px; border-radius: 7px; background: #f3e0d6; color: #803c2a; }
 .dialog-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 21px 22px 15px; }
 .dialog-header h2 { margin: 6px 0 4px; font-size: 28px; }
 .dialog-header p { font-size: 12px; }
@@ -272,6 +282,14 @@ select, .share-dialog input { color: var(--ink); background: var(--card); border
   .dialog-header, .shop-footer, .simple-footer, .inspection-footer { padding-inline: 13px; }
   .site-footer { margin-top: 20px; font-size: 9px; letter-spacing: 0; }
 }
+@media (max-width: 420px) {
+  .header-tools { gap: 5px; }
+  .header-tools .account-button { max-width: 102px; padding-inline: 6px; font-size: 12px; }
+  .account-button svg { width: 14px; height: 14px; margin-right: 3px; }
+  .currency { padding-right: 6px; gap: 4px; }
+  .currency-label { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }

@@ -1,11 +1,9 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { valueForSpecimen } from '../shared/releases.js';
 import { ApiError, uuidPattern } from './errors.js';
-import { initializeGuest, loadGarden, saveTransition } from './garden-repository.js';
+import { loadGarden, saveTransition } from './garden-repository.js';
 
-const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
-const hash = (token) => createHash('sha256').update(token).digest('hex');
 const idValid = (id) => typeof id === 'string' && uuidPattern.test(id);
 
 function validatedAction(action, fastForward, { PHASES, POTS, SLOTS, SPECIES }) {
@@ -69,24 +67,12 @@ function perform(state, action, release) {
 }
 
 export function createGameService(database, { fastForward = process.env.NODE_ENV !== 'production', clock = Date.now } = {}) {
-  async function playerFor(token) {
-    if (!tokenPattern.test(token ?? '')) return null;
-    const { rows } = await database.query("SELECT id FROM windowsill.players WHERE auth_issuer='guest' AND auth_subject=$1", [hash(token)]);
-    return rows[0]?.id ?? null;
-  }
-
-  async function session(token) {
-    if (await playerFor(token)) return { token, created: false };
-    const freshToken = randomBytes(32).toString('base64url');
-    await database.transaction((tx) => initializeGuest(tx, hash(freshToken), clock()));
-    return { token: freshToken, created: true };
-  }
-
-  async function game(player, payload) {
+  async function game(player, payload, verifySession) {
     const request = payload?.requestId;
     if (payload && !idValid(request)) throw new ApiError(400, '缺少有效的请求编号。');
     return database.transaction(async (tx) => {
       await tx.query('SELECT id FROM windowsill.players WHERE id=$1 FOR UPDATE', [player]);
+      if (verifySession && !await verifySession(tx)) throw new ApiError(401, '会话已变更，请重新连接。');
       const { state, release } = await loadGarden(tx, player);
       const action = payload ? validatedAction(payload.action, fastForward, release.content) : null;
       state.fastForward = fastForward;
@@ -119,5 +105,5 @@ export function createGameService(database, { fastForward = process.env.NODE_ENV
     });
   }
 
-  return { playerFor, session, game };
+  return { game };
 }
