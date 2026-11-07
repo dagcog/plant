@@ -1,0 +1,21 @@
+{
+  "name": "windowsill-club",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/start.mjs",
+    "dev:frontend": "node scripts/serve.mjs",
+    "dev:backend": "node backend/start.js",
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/start.mjs --preview",
+    "preview:frontend": "node scripts/serve.mjs --dist",
+    "db:migrate": "node backend/start.js --migrate"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "pg": "8.23.1",
+    "three": "0.187.0"
+  }
+}

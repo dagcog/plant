@@ -1,0 +1,50 @@
+# 窗边小事
+
+《窗边小事》是一款浏览器窗台种植游戏。清晨、正午和傍晚的光线会穿过窗框，窗台上的植物会随土壤和光照长成不同的样子。
+
+## 开始试玩
+
+需要 Node.js 22 和支持 WebGL 2 的现代浏览器。在项目目录运行以下命令，然后打开 `http://127.0.0.1:5173`。命令同时启动静态前端和 `http://127.0.0.1:3001/api` 后端。
+
+```powershell
+npm.cmd ci
+npm.cmd run dev
+```
+
+刚开局已有一盆生长中的洋甘菊，另有一个空位可立即播种。点击盆栽模型可进入特写，拖动旋转，滚轮或双指缩放。点击「等 30 秒」或场景内的时段按钮，可以快速看到生长变化。成熟后可以售卖，或留在花架上。花架、邻里和图鉴都可从顶部进入。
+
+默认后端使用本地 PGlite 数据库，存档落在 `.data/postgres/`。首次访问创建访客档案，同一浏览器保留 Cookie 即可找回进度。此前的浏览器单机档与联机档分开。联网花架可以持链接访问、公开发布或撤回，喜欢记录由后端保存。
+
+## 目录与独立启动
+
+| 目录 | 职责 |
+| --- | --- |
+| `frontend/` | Three.js 场景、界面和 API 客户端 |
+| `backend/` | Node.js API、会话、玩法服务、数据访问和花架服务 |
+| `shared/` | 纯 JavaScript 规则与内容版本 |
+| `db/` | PostgreSQL 迁移、试玩内容和数据库约束测试 |
+
+分别执行 `npm.cmd run dev:backend` 和 `npm.cmd run dev:frontend` 可独立启动。设置 `PLANT_PORT` 或 `PLANT_API_PORT` 可替换默认端口。分别启动且改变前端端口时，还需把新的前端来源填入 `PLANT_FRONTEND_ORIGINS`。
+
+## 设计文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [需求分析](docs/01-需求分析.md) | 核心体验、优先级和验收条件 |
+| [可行性分析](docs/02-可行性分析.md) | 技术、内容、运营约束和上线前验证 |
+| [总体设计](docs/03-总体设计.md) | 玩法结构、模块边界和演进路径 |
+| [详细设计](docs/04-详细设计.md) | 数据、算法、接口、错误处理和测试点 |
+| [数据库设计](docs/05-数据库设计.md) | PostgreSQL 数据模型、交易规则、花架权限与建库 SQL |
+| [前后端拆分与扩展](docs/06-前后端拆分与扩展.md) | API、部署设置、兼容策略与版本迭代流程 |
+
+## 测试与静态构建
+
+```powershell
+npm.cmd test
+npm.cmd run build
+npm.cmd run preview
+```
+
+预览地址为 `http://127.0.0.1:4173`，后端仍使用 3001。`dist/` 是独立静态前端，部署后通过同站点的 `/api` 或 `dist/config.js` 指定的 API 地址访问独立后端。
+
+连接外部 PostgreSQL 时，在后端设置 `DATABASE_URL`，先运行 `npm.cmd run db:migrate`。生产部署应配置 HTTPS、`NODE_ENV=production`、`PLANT_FRONTEND_ORIGINS` 和所需监听地址。

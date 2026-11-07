@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f3e9">
+  <meta name="description" content="窗边小事是一款轻量的窗台种植游戏。">
+  <title>窗边小事 · Windowsill Club</title>
+  <link rel="icon" type="image/svg+xml" href="./src/ui/mark.svg">
+  <link rel="stylesheet" href="./src/ui/styles.css">
+  <script src="./config.js"></script>
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js","orbit-controls":"./vendor/OrbitControls.js","@game/":"./shared/"}}</script>
+  <script type="module" src="./src/main.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#" data-action="view" data-view="garden" aria-label="窗边小事首页">
+        <img src="./src/ui/mark.svg" alt="" width="40" height="40">
+        <span><strong>窗边小事</strong><small>WINDOWSILL CLUB</small></span>
+      </a>
+      <nav id="navigation" aria-label="游戏页面"></nav>
+      <div class="currency" title="叶币" id="currency"></div>
+    </div>
+  </header>
+  <main class="page" id="page">
+    <div id="status" class="status-banner" hidden></div>
+    <section class="intro" id="intro" aria-labelledby="page-title"></section>
+    <section id="garden" class="garden-layout" aria-label="窗台种植">
+      <div class="garden-main">
+        <div class="scene" id="scene" data-phase="morning">
+          <div id="world" class="world" aria-label="窗台和盆栽场景"></div>
+          <div class="phase-controls" id="phase-controls" aria-label="时段"></div>
+          <div class="scene-label"><i></i><span id="phase-caption"></span></div>
+          <div id="slot-markers" class="slot-markers"></div>
+        </div>
+        <div class="garden-toolbar" id="garden-toolbar"></div>
+      </div>
+      <aside class="plant-panel" id="plant-panel" aria-label="当前种植位"></aside>
+    </section>
+    <section id="collection" hidden></section>
+    <footer class="site-footer"><span>窗边小事 <span class="footer-dot">·</span> WINDOWSILL CLUB</span><span>联网试玩 <span class="footer-dot">·</span> 进度由花园服务保存</span></footer>
+  </main>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+  <noscript>请启用 JavaScript 后打开窗边小事。</noscript>
+</body>
+</html>
