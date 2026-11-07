@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { promisify } from 'node:util';
 import { migrate, openDatabase } from '../backend/database.js';
 import { createAuthService } from '../backend/auth-service.js';
 import { createGameService } from '../backend/game-service.js';
@@ -12,6 +14,28 @@ import { salePrice } from '../shared/simulation.js';
 
 const startedAt = 1_780_000_000_000;
 const submit = (service, player, action, requestId = randomUUID()) => service.game(player, { action, requestId });
+
+test('后端收到多个停止信号时只关闭数据库一次', async () => {
+  const script = `
+    await import('./backend/start.js');
+    process.emit('SIGINT');
+    process.emit('SIGTERM');
+    process.emit('SIGINT');
+  `;
+  const { stderr } = await promisify(execFile)(process.execPath, ['--input-type=module', '--eval', script], {
+    cwd: new URL('..', import.meta.url),
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_URL: '',
+      PLANT_DB_DIR: 'memory://',
+      PLANT_API_HOST: '127.0.0.1',
+      PLANT_API_PORT: '0',
+    },
+    timeout: 30_000,
+  });
+  assert.equal(stderr, '');
+});
 
 test('联机成长、交易幂等与花架权限使用关系数据库', async () => {
   const database = await openDatabase({ url: '', directory: 'memory://' });

@@ -27,7 +27,21 @@ try {
       server.listen(port, host, resolve);
     });
     console.log(`花园 API http://${host}:${port}/api · ${process.env.DATABASE_URL ? 'PostgreSQL' : '本地 PGlite'}`);
-    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close(async () => { await database.close(); }));
+    let stopping = false;
+    function shutdown() {
+      if (stopping) return;
+      stopping = true;
+      server.close(async () => {
+        try {
+          await database.close();
+        } catch (error) {
+          console.error('关闭数据库失败：', error.message);
+          process.exitCode = 1;
+        }
+      });
+    }
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
   }
 } catch (error) {
   await database.close();
