@@ -69,6 +69,13 @@ export async function loadGarden(tx, player) {
   return { state, release };
 }
 
+export async function upgradeGardenToV2(tx, state) {
+  await tx.query('UPDATE windowsill.garden_slots SET catalog_version=2 WHERE garden_id=$1', [state.gardenId]);
+  await tx.query('UPDATE windowsill.gardens SET content_version=2, revision=revision+1 WHERE id=$1', [state.gardenId]);
+  state.contentVersion = 2;
+  state.revision++;
+}
+
 async function insertPlant(tx, garden, version, slot, plant, now) {
   await tx.query(`INSERT INTO windowsill.plants
       (id, garden_id, content_version, species_key, pot_key, visual_seed, slot_key, moisture, nutrition,
@@ -80,7 +87,7 @@ async function insertPlant(tx, garden, version, slot, plant, now) {
 const slottedPlants = (state) => Object.entries(state.slots).filter(([, { plant }]) => plant).map(([slot, { plant }]) => [slot, plant]);
 
 export async function saveTransition(tx, { player, release, before, state, now, request, action }) {
-  const { version, content: { ACHIEVEMENTS, SPECIES } } = release;
+  const { version, content: { ACHIEVEMENTS } } = release;
   const garden = state.gardenId;
   const original = new Map(slottedPlants(before).map(([, plant]) => [plant.id, plant]));
   const currentSlots = slottedPlants(state);
@@ -93,10 +100,11 @@ export async function saveTransition(tx, { player, release, before, state, now, 
     const old = original.get(plant.id);
     if (!old) await insertPlant(tx, garden, version, slot, plant, now);
     else if (JSON.stringify(old) !== JSON.stringify(plant)) {
+      const style = releaseFor(plant.contentVersion).content.SPECIES[plant.species];
       await tx.query(`UPDATE windowsill.plants SET moisture=$2,nutrition=$3,exposure=$4,growth=$5,fit_samples=$6,
         fit_sum=$7,quality=$8,variant_key=$9,matured_at=COALESCE(matured_at,$10::timestamptz) WHERE id=$1`,
       [plant.id, plant.moisture, plant.nutrition, plant.exposure, plant.growth, plant.samples, plant.score,
-        plant.quality, plant.quality === null ? null : plant.rare ? SPECIES[plant.species].rareKey : 'normal', plant.quality === null ? null : timestamp(now)]);
+        plant.quality, plant.quality === null ? null : plant.rare ? style.rareKey : 'normal', plant.quality === null ? null : timestamp(now)]);
     }
   }
 

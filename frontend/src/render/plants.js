@@ -1,39 +1,11 @@
 import * as T from 'three';
 import { POTS, SPECIES } from '@game/content.js';
 import { seeded } from '@game/simulation.js';
+import { dispose, material, mesh, segment } from './geometry.js';
+import { cloneStage } from './model-assets.js';
+import { succulentModels } from './succulents.js';
 
 const up = new T.Vector3(0, 1, 0);
-const material = (color, extra = {}) => new T.MeshStandardMaterial({ color, roughness: 0.78, ...extra });
-
-export function mesh(group, geometry, surface, position = [0, 0, 0], shadow = true) {
-  const object = new T.Mesh(geometry, surface);
-  object.position.set(...position);
-  object.castShadow = shadow;
-  object.receiveShadow = true;
-  group.add(object);
-  return object;
-}
-
-export function dispose(group) {
-  const geometries = new Set();
-  const materials = new Set();
-  group.traverse((object) => {
-    if (!object.isMesh) return;
-    geometries.add(object.geometry);
-    materials.add(object.material);
-  });
-  for (const geometry of geometries) geometry.dispose();
-  for (const surface of materials) surface.dispose();
-  group.removeFromParent();
-}
-
-export function segment(group, from, to, radius, surface, tip = radius) {
-  const direction = to.clone().sub(from);
-  const middle = from.clone().lerp(to, 0.5);
-  const object = mesh(group, new T.CylinderGeometry(tip, radius, direction.length(), 7), surface, middle.toArray());
-  object.quaternion.setFromUnitVectors(up, direction.normalize());
-  return object;
-}
 
 export function makePot(id) {
   const style = POTS[id];
@@ -115,11 +87,31 @@ function spike(group, tip, radius, surfaces) {
   }
 }
 
-export function makePlant(specimen, stage = 3) {
+export function makePlant(specimen, stage = 3, onChange = () => {}) {
   const style = SPECIES[specimen.species];
   const plant = makePot(specimen.pot);
   const quality = specimen.quality ?? 76;
   const stature = 0.75 + quality / 250;
+  const succulent = succulentModels.get(style.model);
+  if (succulent) {
+    const crown = new T.Group();
+    crown.position.y = 0.325;
+    crown.scale.setScalar(stature);
+    plant.add(crown);
+    const fallback = new T.Group();
+    succulent(fallback, style, specimen, stage);
+    crown.add(fallback);
+    if (style.modelSet) {
+      cloneStage(style.modelSet, stage, specimen.rare ? style.rare : null).then((model) => {
+        if (plant.userData.disposed) { dispose(model); return; }
+        model.rotation.y = seeded(specimen.seed, 7) * Math.PI * 2;
+        dispose(fallback);
+        crown.add(model);
+        onChange();
+      }, (error) => console.warn(`Using procedural plant for ${specimen.species} stage ${stage + 1}:`, error));
+    }
+    return plant;
+  }
   const leafColor = specimen.rare && style.model === 'clover' ? '#ba8249' : style.leaf;
   const leaves = [0.76, 1, 1.18].map((shade) => material(new T.Color(leafColor).multiplyScalar(shade), { side: T.DoubleSide }));
   const stems = material(new T.Color(style.leaf).multiplyScalar(0.8));

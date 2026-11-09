@@ -10,6 +10,7 @@ import { migrate, openDatabase } from '../backend/database.js';
 import { createAuthService } from '../backend/auth-service.js';
 import { createGameService } from '../backend/game-service.js';
 import { createShelfService } from '../backend/shelf-service.js';
+import { releaseFor } from '../shared/releases.js';
 import { salePrice } from '../shared/simulation.js';
 
 const startedAt = 1_780_000_000_000;
@@ -130,4 +131,67 @@ test('接入已手动初始化的数据库，并在服务重开后登录恢复�
     await database?.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('旧窗台保留原植株版本并能种齐新多肉、收集成就和分享花架', async () => {
+  const database = await openDatabase({ url: '', directory: 'memory://' });
+  try {
+    await migrate(database);
+    let now = startedAt;
+    const auth = createAuthService(database, { clock: () => now });
+    const games = createGameService(database, { clock: () => now });
+    const shelves = createShelfService(database);
+    const { playerId: player } = await auth.ensure({});
+    const { playerId: visitor } = await auth.ensure({});
+    const { state: initial } = await games.game(player);
+    const originalPlant = initial.slots.left.plant.id;
+    const v1 = releaseFor(1).rules;
+    const expectedV1 = structuredClone(initial);
+    v1.advance(expectedV1, 90);
+    // Reproduce a garden saved by version 1, including its original catalog foreign keys.
+    await database.transaction(async (tx) => {
+      await tx.query('UPDATE windowsill.gardens SET content_version=1 WHERE id=$1', [initial.gardenId]);
+      await tx.query('UPDATE windowsill.garden_slots SET catalog_version=1 WHERE garden_id=$1', [initial.gardenId]);
+      await tx.query('UPDATE windowsill.plants SET content_version=1 WHERE id=$1', [originalPlant]);
+    });
+    // Run the upgrade through the same restricted role used on the Ubuntu server.
+    const grants = await readFile(new URL('../deploy/postgres-runtime.sql', import.meta.url), 'utf8');
+    await database.transaction(async (tx) => {
+      await tx.exec('CREATE ROLE windowsill_app');
+      await tx.exec(grants.replace(/^\s*BEGIN;\s*/, '').replace(/\s*COMMIT;\s*$/, ''));
+    });
+    await database.query('SET ROLE windowsill_app');
+
+    now += 90_000;
+    const { state: first } = await submit(games, player, { type: 'plant', species: 'bear_paw', pot: 'clay', slot: 'middle' });
+    assert.equal(first.contentVersion, 2);
+    assert.equal(first.slots.left.plant.id, originalPlant);
+    assert.equal(first.slots.left.plant.contentVersion, 1);
+    assert.equal(first.slots.left.plant.quality, expectedV1.slots.left.plant.quality);
+    assert.equal(first.slots.middle.plant.contentVersion, 2);
+    assert.equal(first.coins, expectedV1.coins - 35);
+    const { rows: [oldAchievement] } = await database.query("SELECT content_version FROM windowsill.earned_achievements WHERE player_id=$1 AND achievement_key='bloom'", [player]);
+    assert.equal(oldAchievement.content_version, 1);
+    const sale = await submit(games, player, { type: 'sell', slot: 'left', expectedId: originalPlant });
+    assert.equal(sale.state.coins, first.coins + v1.salePrice(first.slots.left.plant) + 10);
+
+    let plant = first.slots.middle.plant;
+    for (const species of ['bear_paw', 'haworthia', 'peach_egg']) {
+      if (species !== 'bear_paw') {
+        const planted = await submit(games, player, { type: 'plant', species, pot: 'clay', slot: 'middle' });
+        plant = planted.state.slots.middle.plant;
+      }
+      now += 200_000;
+      const { state: displayed } = await submit(games, player, { type: 'display', slot: 'middle', expectedId: plant.id });
+      assert.equal(displayed.shelf.at(-1).species, species);
+      assert.equal(displayed.album[species].count, 1);
+    }
+    const { state: shared } = await submit(games, player, { type: 'publish', visibility: 'public' });
+    assert.ok(Object.hasOwn(shared.achievements, 'succulent_collection'));
+    assert.equal(Object.hasOwn(shared.achievements, 'collection'), false);
+    const { rows: [reward] } = await database.query("SELECT delta FROM windowsill.leaf_ledger WHERE player_id=$1 AND achievement_key='succulent_collection'", [player]);
+    assert.equal(Number(reward.delta), 24);
+    const published = await shelves.get(shared.sharing.token, visitor);
+    assert.deepEqual(published.plants.map(({ species }) => species), ['bear_paw', 'haworthia', 'peach_egg']);
+  } finally { await database.close(); }
 });

@@ -1,7 +1,8 @@
 import * as T from 'three';
 import { SLOTS } from '@game/content.js';
-import { seeded, stageOf } from '@game/simulation.js';
-import { dispose, makePlant, mesh, segment } from './plants.js';
+import { seeded, stageIndex } from '@game/simulation.js';
+import { makePlant } from './plants.js';
+import { dispose, mesh, segment } from './geometry.js';
 import { landscape } from './landscape.js';
 
 const lighting = {
@@ -222,13 +223,13 @@ export function createWorld(host, onSelect, onMarker, onFallback) {
       }
       for (const slot of SLOTS) {
         const specimen = state.slots[slot.id].plant;
-        const stage = specimen ? ['发芽', '展叶', '孕蕾', '成熟'].indexOf(stageOf(specimen)) : -1;
+        const stage = specimen ? stageIndex(specimen) : -1;
         const key = specimen ? `${specimen.species}/${specimen.pot}/${specimen.seed}/${stage}/${specimen.quality}/${specimen.rare}` : '';
         const previous = plants.get(slot.id);
         if (key === (previous?.key ?? '')) continue;
         if (previous) { dispose(previous.object); plants.delete(slot.id); }
         if (specimen) {
-          const object = makePlant(specimen, stage);
+          const object = makePlant(specimen, stage, draw);
           object.position.set(slot.x, y, z);
           object.scale.setScalar(1.18);
           scene.add(object);

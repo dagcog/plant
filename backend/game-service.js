@@ -1,8 +1,8 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { valueForSpecimen } from '../shared/releases.js';
+import { releaseFor, valueForSpecimen } from '../shared/releases.js';
 import { ApiError, uuidPattern } from './errors.js';
-import { loadGarden, saveTransition } from './garden-repository.js';
+import { loadGarden, saveTransition, upgradeGardenToV2 } from './garden-repository.js';
 
 const idValid = (id) => typeof id === 'string' && uuidPattern.test(id);
 
@@ -74,7 +74,8 @@ export function createGameService(database, { fastForward = process.env.NODE_ENV
       await tx.query('SELECT id FROM windowsill.players WHERE id=$1 FOR UPDATE', [player]);
       if (verifySession && !await verifySession(tx)) throw new ApiError(401, '会话已变更，请重新连接。');
       const { state, release } = await loadGarden(tx, player);
-      const action = payload ? validatedAction(payload.action, fastForward, release.content) : null;
+      const target = release.version === 1 ? releaseFor(2) : release;
+      const action = payload ? validatedAction(payload.action, fastForward, target.content) : null;
       state.fastForward = fastForward;
       if (action) {
         const { rows: [receipt] } = await tx.query('SELECT arguments,result FROM windowsill.action_requests WHERE player_id=$1 AND request_id=$2', [player, request]);
@@ -94,12 +95,13 @@ export function createGameService(database, { fastForward = process.env.NODE_ENV
         }
         await saveTransition(tx, { player, release, before, state, now, request: settlement });
       }
+      if (target !== release) await upgradeGardenToV2(tx, state);
       if (!action) return { state, message: '' };
 
       before = structuredClone(state);
-      const result = perform(state, action, release);
+      const result = perform(state, action, target);
       await saveRequest(tx, player, request, action);
-      if (!isDeepStrictEqual(before, state)) await saveTransition(tx, { player, release, before, state, now, request, action });
+      if (!isDeepStrictEqual(before, state)) await saveTransition(tx, { player, release: target, before, state, now, request, action });
       await tx.query('UPDATE windowsill.action_requests SET result=$3 WHERE player_id=$1 AND request_id=$2', [player, request, JSON.stringify(result)]);
       return { state, ...result };
     });

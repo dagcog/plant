@@ -3,6 +3,7 @@ import { createAuthService } from './auth-service.js';
 import { createGameService } from './game-service.js';
 import { createShelfService } from './shelf-service.js';
 import { createApi } from './http.js';
+import { currentRelease } from '../shared/releases.js';
 
 const production = process.env.NODE_ENV === 'production';
 if (production && !process.env.DATABASE_URL) throw new Error('生产环境需要 DATABASE_URL');
@@ -14,6 +15,8 @@ try {
     await database.close();
   } else {
     await database.query('SELECT token_digest FROM windowsill.account_sessions LIMIT 0');
+    const { rows } = await database.query('SELECT version FROM windowsill.content_releases WHERE version=$1', [currentRelease.version]);
+    if (!rows.length) throw new Error('内容目录尚未迁移，请先运行 npm run db:migrate。');
     const fastForward = !production && process.env.PLANT_FAST_FORWARD !== '0';
     const port = Number(process.env.PLANT_API_PORT ?? 3001);
     const host = process.env.PLANT_API_HOST ?? '127.0.0.1';

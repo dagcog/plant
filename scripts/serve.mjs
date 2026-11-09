@@ -2,15 +2,11 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { vendor } from './vendor.mjs';
 
 const project = fileURLToPath(new URL('..', import.meta.url));
 const built = process.argv.includes('--dist');
 const root = resolve(project, built ? 'dist' : 'frontend');
-const vendor = {
-  '/vendor/three.module.js': 'node_modules/three/build/three.module.js',
-  '/vendor/three.core.js': 'node_modules/three/build/three.core.js',
-  '/vendor/OrbitControls.js': 'node_modules/three/examples/jsm/controls/OrbitControls.js',
-};
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.png': 'image/png' };
 const port = Number(process.env.PLANT_PORT ?? (built ? 4173 : 5173));
 
@@ -26,7 +22,8 @@ createServer(async (request, response) => {
     }
     let base = root;
     let relative = `.${path === '/' ? '/index.html' : path}`;
-    if (!built && Object.hasOwn(vendor, path)) { base = resolve(project, 'node_modules/three'); relative = vendor[path].slice('node_modules/three/'.length); }
+    const vendorPath = path.slice(1);
+    if (!built && Object.hasOwn(vendor, vendorPath)) { base = project; relative = vendor[vendorPath]; }
     else if (!built && path.startsWith('/shared/')) { base = resolve(project, 'shared'); relative = path.slice('/shared/'.length); }
     const file = resolve(base, relative);
     if (!file.startsWith(base + sep)) { response.writeHead(404).end(); return; }

@@ -1,1 +1,1 @@
-export * from './releases/v1/content.js';
+export * from './releases/v2/content.js';
