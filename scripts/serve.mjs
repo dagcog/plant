@@ -4,7 +4,7 @@ import { resolve, sep, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { vendor } from './vendor.mjs';
 
-const project = fileURLToPath(new URL('..', import.meta.url));
+const project = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const built = process.argv.includes('--dist');
 const root = resolve(project, built ? 'dist' : 'frontend');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.png': 'image/png' };
