@@ -3,6 +3,7 @@ import { needsStarterKit, phaseAt, stageOf, sunlight } from '@game/simulation.js
 import { valueForSpecimen as salePrice } from '@game/releases.js';
 import { icon } from './icons.js';
 import { plantArt } from './illustrations.js';
+import { materialShop, pottingSetup, pottingSummary } from './potting.js';
 
 const nav = [['garden', 'window', '我的窗台'], ['shelf', 'shelf', '我的花架'], ['neighbors', 'people', '邻里花园'], ['album', 'book', '植物图鉴']];
 const headings = {
@@ -64,7 +65,7 @@ export function panel(state, selected) {
   const preview = `<button type="button" class="mini-plant" data-action="inspect-slot" data-slot="${selected}" aria-label="查看${species.name}的盆栽细节">${plantArt(plant)}${icon('view', 13)}</button>`;
   const values = [plant.moisture, plant.nutrition, sunlight(state.time, selected, plant.exposure)].map(Math.round);
   return `${heading}<div class="plant-heading">${preview}<div><div class="latin">${species.latin}</div><h2>${species.name}</h2><p>${POTS[plant.pot].name} <i></i> ${slot.name}</p></div></div>
-    <div class="growth"><div><span>${tag(stage, mature ? 'ripe' : '')}${plant.rare ? tag(`${icon('sparkle', 12)} 异色`, 'rare') : ''}</span><strong data-growth>${mature ? `品质 ${plant.quality}` : `${Math.floor(plant.growth * 100)}%`}</strong></div><div class="meter"><i data-growth-bar style="width:${plant.growth * 100}%"></i></div></div>
+    ${plant.potting ? `<p class="potting-caption">${pottingSummary(plant)}</p>` : ''}<div class="growth"><div><span>${tag(stage, mature ? 'ripe' : '')}${plant.rare ? tag(`${icon('sparkle', 12)} 异色`, 'rare') : ''}</span><strong data-growth>${mature ? `品质 ${plant.quality}` : `${Math.floor(plant.growth * 100)}%`}</strong></div><div class="meter"><i data-growth-bar style="width:${plant.growth * 100}%"></i></div></div>
     ${mature ? `<div class="ripe-note">${icon(plant.rare ? 'sparkle' : 'check')}<p>${plant.rare ? `发现异色「${species.rareName}」` : '植物已经成熟，已记入图鉴。'}</p></div><div class="panel-bottom two-actions">${button('display', '摆上花架', 'shelf', { class: 'primary', attrs: `data-slot="${selected}" data-plant="${plant.id}"`, disabled: state.shelf.length >= SHELF_LIMIT })}${button('sell-slot', `售卖 ${coin(salePrice(plant))}`, '', { attrs: `data-slot="${selected}" data-plant="${plant.id}"` })}</div>` : `
     <div class="plant-metrics">${metric('土壤湿度', 'droplet', values[0], species.ideal[0], '#7895a0', 0)}${metric('土壤养分', 'feed', values[1], species.ideal[1], '#8d9b68', 1)}${metric('当前光照', 'sun', values[2], species.ideal[2], '#cf9e56', 2)}</div>
     <div class="exposures" aria-label="调节光照">${EXPOSURES.map(({ name }, index) => `<button type="button" data-action="exposure" data-slot="${selected}" data-value="${index}" data-plant="${plant.id}" aria-pressed="${plant.exposure === index}">${name}</button>`).join('')}</div>
@@ -95,13 +96,16 @@ export function dialogHeader(kicker, title, description) {
 }
 
 export function shop(state, draft) {
+  const controls = { button, dialogHeader, coin };
+  if (draft.page === 'materials') return materialShop(state, draft, controls);
+  if (draft.page === 'potting') return pottingSetup(state, draft, controls);
   const available = SLOTS.filter(({ id }) => state.slots[id].unlocked && !state.slots[id].plant);
   const cost = SPECIES[draft.species].price + POTS[draft.pot].price;
   const option = (id, entry, field, mode) => `<button type="button" class="shop-option" data-action="choose" data-field="${field}" data-value="${id}" aria-pressed="${draft[field] === id}"><span class="shop-art ${id}">${mode === 'seed' ? art(id, 'clay', mode) : art('chamomile', id, mode)}</span><span><strong>${entry.name}</strong><small>${entry.detail}</small></span>${coin(entry.price)}</button>`;
-  return `${dialogHeader('THE GARDEN SHOP', '种植商店', '选一粒种子、一只花盆，给窗台添一点绿。')}<div class="shop-body"><div class="shop-choices"><h3>01 <span>选种子</span></h3>${Object.entries(SPECIES).map(([id, entry]) => option(id, entry, 'species', 'seed')).join('')}</div><div class="shop-choices"><h3>02 <span>选花盆</span></h3>${Object.entries(POTS).map(([id, entry]) => option(id, entry, 'pot', 'pot')).join('')}</div></div><div class="shop-footer"><div><label for="shop-slot">种植到</label><select id="shop-slot" ${available.length ? '' : 'disabled'}>${available.length ? available.map(({ id, name }) => `<option value="${id}"${draft.slot === id ? ' selected' : ''}>${name}</option>`).join('') : '<option>暂无空种植位</option>'}</select></div><div class="shop-total">${needsStarterKit(state) && available.length ? button('kit', '领取练习种植包', 'seed', { class: 'quiet' }) : ''}${button('plant', `购买并种下 ${coin(cost)}`, 'plus', { class: 'primary', disabled: !available.length || !available.some(({ id }) => id === draft.slot) || state.coins < cost })}</div></div>`;
+  return `${dialogHeader('THE GARDEN SHOP', '种植商店', '先选种子和花盆，播种前可以配土。')}<div class="shop-body"><div class="shop-choices"><h3><span>选种子</span></h3>${Object.entries(SPECIES).map(([id, entry]) => option(id, entry, 'species', 'seed')).join('')}</div><div class="shop-choices"><h3><span>选花盆</span></h3>${Object.entries(POTS).map(([id, entry]) => option(id, entry, 'pot', 'pot')).join('')}</div></div><div class="shop-footer"><div><label for="shop-slot">种植到</label><select id="shop-slot" ${available.length ? '' : 'disabled'}>${available.length ? available.map(({ id, name }) => `<option value="${id}"${draft.slot === id ? ' selected' : ''}>${name}</option>`).join('') : '<option>暂无空种植位</option>'}</select></div><div class="shop-total">${needsStarterKit(state) && available.length ? button('kit', '领取练习种植包', 'seed', { class: 'quiet' }) : ''}${button('shop-page', '土壤与石材', 'store', { attrs: 'data-value="materials"' })}${button('shop-page', `下一步配土 ${coin(cost)}`, 'plus', { class: 'primary', attrs: 'data-value="potting"', disabled: !available.length || !available.some(({ id }) => id === draft.slot) || state.coins < cost })}</div></div>`;
 }
 
 export function inspection(specimen) {
   const species = SPECIES[specimen.species];
-  return `${dialogHeader('A CLOSER LOOK', species.name, specimen.rare ? `异色 · ${species.rareName}` : `${species.latin} · ${POTS[specimen.pot].name}`)}<div class="inspection-stage" id="inspection-stage">${plantArt(specimen)}</div><div class="inspection-footer"><span>拖动旋转 · 滚轮或双指缩放</span><div class="camera-tools">${iconButton('turn-left', '向左旋转', 'left')}${iconButton('turn-right', '向右旋转', 'right')}${iconButton('zoom-out', '缩小', 'minus')}${iconButton('zoom-in', '放大', 'plus')}${iconButton('reset-camera', '重置视角', 'rotate')}</div></div>`;
+  return `${dialogHeader('A CLOSER LOOK', species.name, specimen.rare ? `异色 · ${species.rareName}` : `${species.latin} · ${POTS[specimen.pot].name}`)}<div class="inspection-stage" id="inspection-stage">${plantArt(specimen)}</div>${specimen.potting ? `<p class="inspection-potting">${pottingSummary(specimen)}</p>` : ''}<div class="inspection-footer"><span>拖动旋转 · 滚轮或双指缩放</span><div class="camera-tools">${iconButton('turn-left', '向左旋转', 'left')}${iconButton('turn-right', '向右旋转', 'right')}${iconButton('zoom-out', '缩小', 'minus')}${iconButton('zoom-in', '放大', 'plus')}${iconButton('reset-camera', '重置视角', 'rotate')}</div></div>`;
 }

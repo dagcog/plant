@@ -12,7 +12,7 @@ export function shareURL(state, current) {
 export function readShare(hash) {
   if (!hash.startsWith('#garden=')) return null;
   const encoded = hash.slice(8);
-  if (encoded.length > 1800 || !/^[A-Za-z0-9_-]+$/.test(encoded)) throw new Error('无法打开这张花架名片。');
+  if (encoded.length > 3200 || !/^[A-Za-z0-9_-]+$/.test(encoded)) throw new Error('无法打开这张花架名片。');
   let data;
   try { data = JSON.parse(atob(encoded.replaceAll('-', '+').replaceAll('_', '/'))); }
   catch { throw new Error('无法打开这张花架名片。'); }

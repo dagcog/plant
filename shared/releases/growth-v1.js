@@ -18,6 +18,7 @@ export function stageIndex(plant) {
 export function createRules(content, {
   collections = { collection: Object.keys(content.SPECIES) },
   contentForPlant = () => content,
+  pottingEffects,
 } = {}) {
   const { ACHIEVEMENTS, CYCLE, EXPOSURES, OFFLINE_CAP, PHASES, POTS, SHELF_LIMIT, SLOTS, SPECIES } = content;
   const bySlot = (id) => SLOTS.find((slot) => slot.id === id);
@@ -60,8 +61,8 @@ export function createRules(content, {
   }
 
   function specimenOf(plant) {
-    const { species, pot, seed, rare, quality } = plant;
-    return { species, pot, seed, rare, quality };
+    const { species, pot, seed, rare, quality, potting } = plant;
+    return { species, pot, seed, rare, quality, ...(potting && { potting }) };
   }
 
   function mature(state, plant) {
@@ -79,6 +80,7 @@ export function createRules(content, {
 
   function advance(state, seconds) {
     const total = clamp(Math.floor(seconds), 0, OFFLINE_CAP);
+    const effects = pottingEffects && Object.fromEntries(SLOTS.map(({ id }) => [id, state.slots[id].plant && pottingEffects(state.slots[id].plant)]));
     for (let elapsed = 0; elapsed < total; elapsed++) {
       state.time++;
       for (const { id } of SLOTS) {
@@ -89,11 +91,12 @@ export function createRules(content, {
         const light = sunlight(state.time, id, plant.exposure);
         const values = [plant.moisture, plant.nutrition, light];
         const fit = values.reduce((sum, value, i) => sum + 1 - Math.abs(value - species.ideal[i]) / 100, 0) / 3;
-        plant.moisture = clamp(plant.moisture - catalog.POTS[plant.pot].drainage * (0.10 + light * 0.0017));
+        const soil = effects?.[id];
+        plant.moisture = clamp(plant.moisture - catalog.POTS[plant.pot].drainage * (0.10 + light * 0.0017) * (soil?.drying ?? 1));
         plant.nutrition = clamp(plant.nutrition - 0.13);
-        plant.score += fit;
+        plant.score += Math.min(1, fit + (soil?.quality ?? 0));
         plant.samples++;
-        plant.growth += (0.58 + 0.54 * fit) / species.seconds;
+        plant.growth += (0.58 + 0.54 * fit) / species.seconds * (1 + (soil?.speed ?? 0));
         if (plant.growth >= 1) mature(state, plant);
       }
     }

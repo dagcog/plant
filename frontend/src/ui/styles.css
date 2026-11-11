@@ -220,6 +220,23 @@ dialog[data-type=confirm], dialog[data-type=share], dialog[data-type=account] { 
 .shop-footer label, .share-dialog label { color: var(--muted); font-size: 11px; margin-right: 5px; }
 select, .share-dialog input { color: var(--ink); background: var(--card); border: 1px solid #dcdacc; border-radius: 7px; padding: 7px 6px; }
 .shop-total { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.material-content { padding: 0 22px 14px; display: grid; gap: 12px; }
+.material-content h3 { color: var(--muted); font-size: 13px; margin: 0 0 5px; }
+.material-card { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 9px; align-items: center; padding: 4px 8px; border: 1px solid var(--line); border-radius: 9px; background: #faf8f0; }
+.material-card + .material-card { margin-top: 4px; }
+.material-art { display: block; background: #efe7d3; border-radius: 7px; object-fit: contain; }
+.material-card strong { font-size: 13px; }
+.material-card small { display: block; color: var(--muted); font-size: 11px; }
+.mix-tools, .mix-adjust { display: flex; align-items: center; gap: 6px; }
+.mix-tools { flex-wrap: wrap; font-size: 12px; }
+.mix-tools > strong { margin-left: auto; }
+.mix-tools [aria-pressed=true] { background: #e7eddf; }
+.mix-adjust .button { min-width: 30px; padding-inline: 6px; }
+.mix-adjust strong { min-width: 3ch; text-align: center; }
+.potting-layers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.potting-layers label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+.potting-note, .potting-caption, .inspection-potting { font-size: 12px; color: var(--muted); }
+.inspection-potting { padding: 8px 22px; background: #f5f3e9; }
 .simple-footer { justify-content: flex-end; }
 .share-dialog { padding: 0 22px 16px; }
 .share-dialog input { display: block; width: 100%; margin: 6px 0; }
@@ -280,6 +297,9 @@ select, .share-dialog input { color: var(--ink); background: var(--card); border
   .shop-option > .coin-inline { grid-column: 2; }
   .shop-art { width: 32px; height: 36px; grid-row: span 2; }
   .dialog-header, .shop-footer, .simple-footer, .inspection-footer { padding-inline: 13px; }
+  .material-content { padding-inline: 13px; }
+  .material-card { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 5px; }
+  .material-art { width: 36px; height: 36px; }
   .site-footer { margin-top: 20px; font-size: 9px; letter-spacing: 0; }
 }
 @media (max-width: 420px) {

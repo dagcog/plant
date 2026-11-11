@@ -58,6 +58,29 @@ test('水分、养分、光照与盆器影响累积生长，失养仍能成熟',
   assert.ok(cared.slots.middle.plant.quality > neglected.slots.middle.plant.quality);
 });
 
+test('推荐土壤提高生长速度和成熟品质，普通土不消耗材料', () => {
+  const normal = fresh();
+  const improved = fresh();
+  const drainage = fresh();
+  const sow = { type: 'plant', slot: 'middle', species: 'haworthia', pot: 'clay', seed: 17 };
+  improved.materialStock = { coir: 100, compost: 100, perlite: 100, pumice: 100 };
+  drainage.materialStock = { clay_pebbles: 1 };
+  applyAction(normal, sow);
+  applyAction(improved, { ...sow, potting: { mix: { coir: 30, compost: 10, perlite: 20, pumice: 40 } } });
+  applyAction(drainage, { ...sow, potting: { drainage: 'clay_pebbles' } });
+  assert.equal(normal.slots.middle.plant.potting, undefined);
+  assert.equal(normal.materialStock, undefined);
+  advance(normal, 65);
+  advance(improved, 65);
+  advance(drainage, 65);
+  assert.ok(improved.slots.middle.plant.growth > normal.slots.middle.plant.growth);
+  assert.ok(drainage.slots.middle.plant.moisture < normal.slots.middle.plant.moisture);
+  advance(normal, 150);
+  advance(improved, 150);
+  assert.ok(improved.slots.middle.plant.quality > normal.slots.middle.plant.quality);
+  assert.ok(improved.slots.middle.plant.samples < normal.slots.middle.plant.samples);
+});
+
 test('异色可复现且图鉴与里程碑只结算一次', () => {
   const state = fresh();
   let seed = 0;

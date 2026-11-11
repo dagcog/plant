@@ -1,4 +1,4 @@
-import { POTS, SHELF_LIMIT, SLOTS, SPECIES } from '@game/content.js';
+import { POTS, SHELF_LIMIT, SLOTS, SOIL_RECIPES, SPECIES } from '@game/content.js';
 import { phaseAt, stageOf, sunlight } from '@game/simulation.js';
 import { valueForSpecimen as salePrice } from '@game/releases.js';
 import { readShare } from '@game/sharing.js';
@@ -250,7 +250,10 @@ function renderShop() {
 }
 
 function openShop(id) {
-  draft = { slot: id, species: Object.keys(SPECIES)[0], pot: Object.keys(POTS)[0] };
+  draft = {
+    slot: id, species: Object.keys(SPECIES)[0], pot: Object.keys(POTS)[0],
+    page: 'plant', materialReturn: 'plant', mix: null, topping: null, drainage: null,
+  };
   openDialog('shop', shopMarkup());
   dialog.querySelector('.shop-option[aria-pressed="true"]')?.focus();
 }
@@ -305,7 +308,14 @@ dialog.addEventListener('click', (event) => {
 });
 
 dialog.addEventListener('change', (event) => {
-  if (event.target.id === 'shop-slot' && draft) draft.slot = event.target.value;
+  if (!draft) return;
+  if (event.target.id === 'shop-slot') draft.slot = event.target.value;
+  const layer = event.target.dataset.layer;
+  if (layer === 'topping' || layer === 'drainage') {
+    draft[layer] = event.target.value || null;
+    renderShop();
+    dialog.querySelector(`[data-layer="${layer}"]`)?.focus();
+  }
 });
 
 dialog.addEventListener('submit', (event) => {
@@ -342,6 +352,33 @@ document.addEventListener('click', async (event) => {
     case 'select': selected = slot; render(); break;
     case 'shop': openShop(slot); break;
     case 'choose': draft[data.field] = data.value; renderShop(); break;
+    case 'shop-page':
+      if (data.value === 'materials') draft.materialReturn = draft.page;
+      draft.page = data.value;
+      renderShop();
+      dialog.scrollTop = 0;
+      dialog.querySelector('[data-action="close"]')?.focus();
+      break;
+    case 'buy-material':
+      await commit({ type: 'buy-material', material: data.value });
+      break;
+    case 'mix-reset':
+      draft.mix = null;
+      renderShop();
+      break;
+    case 'mix-recipe':
+      draft.mix = { ...SOIL_RECIPES[draft.species] };
+      renderShop();
+      break;
+    case 'mix-part': {
+      const mix = draft.mix ??= {};
+      const amount = (mix[data.value] ?? 0) + Number(data.delta);
+      if (amount > 0) mix[data.value] = amount;
+      else delete mix[data.value];
+      if (!Object.keys(mix).length) draft.mix = null;
+      renderShop();
+      break;
+    }
     case 'inspect-slot': openInspection(state.slots[slot]?.plant); break;
     case 'inspect-specimen': openInspection((view === 'visit' ? visit?.plants : state.shelf)?.[index]); break;
     case 'close': closeDialog(); break;
@@ -383,9 +420,10 @@ document.addEventListener('click', async (event) => {
     }
     case 'plant': case 'kit': {
       const requestDraft = draft;
-      const { slot: destination, species, pot } = draft;
+      const { slot: destination, species, pot, mix, topping, drainage } = draft;
       const kit = action === 'kit';
-      const result = await commit({ type: 'plant', slot: destination, species: kit ? 'chamomile' : species, pot: kit ? 'clay' : pot, kit });
+      const potting = !kit && (mix || topping || drainage) ? { mix, topping, drainage } : undefined;
+      const result = await commit({ type: 'plant', slot: destination, species: kit ? 'chamomile' : species, pot: kit ? 'clay' : pot, kit, potting });
       if (result?.plantedId) {
         selected = destination;
         if (draft === requestDraft) closeDialog();

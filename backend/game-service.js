@@ -1,20 +1,27 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { releaseFor, valueForSpecimen } from '../shared/releases.js';
+import { currentRelease, valueForSpecimen } from '../shared/releases.js';
+import { normalizePotting } from '../shared/releases/v3/potting.js';
 import { ApiError, uuidPattern } from './errors.js';
-import { loadGarden, saveTransition, upgradeGardenToV2 } from './garden-repository.js';
+import { loadGarden, saveTransition, upgradeGarden } from './garden-repository.js';
 
 const idValid = (id) => typeof id === 'string' && uuidPattern.test(id);
 
-function validatedAction(action, fastForward, { PHASES, POTS, SLOTS, SPECIES }) {
+function validatedAction(action, fastForward, { PHASES, POTS, SLOTS, SPECIES, MATERIALS }) {
   if (!action || typeof action !== 'object' || Array.isArray(action)) throw new ApiError(400, '缺少游戏操作。');
   const { type, slot, expectedId, species, pot, value, offset, id, visibility } = action;
   const slotValid = (id) => SLOTS.some((slot) => slot.id === id);
   const target = slotValid(slot) && idValid(expectedId);
   switch (type) {
-    case 'plant':
+    case 'plant': {
+      const potting = normalizePotting(action.potting);
+      if (potting === undefined || (potting && action.kit === true)) throw new ApiError(400, '配土比例必须合计 100%，并选用对应的材料。');
       if (slotValid(slot) && typeof species === 'string' && Object.hasOwn(SPECIES, species)
-        && typeof pot === 'string' && Object.hasOwn(POTS, pot)) return { type, slot, species, pot, kit: action.kit === true };
+        && typeof pot === 'string' && Object.hasOwn(POTS, pot)) return { type, slot, species, pot, kit: action.kit === true, ...(potting && { potting }) };
+      break;
+    }
+    case 'buy-material':
+      if (typeof action.material === 'string' && Object.hasOwn(MATERIALS, action.material)) return { type, material: action.material };
       break;
     case 'unlock': if (slotValid(slot)) return { type, slot }; break;
     case 'water': case 'feed': case 'display':
@@ -74,7 +81,7 @@ export function createGameService(database, { fastForward = process.env.NODE_ENV
       await tx.query('SELECT id FROM windowsill.players WHERE id=$1 FOR UPDATE', [player]);
       if (verifySession && !await verifySession(tx)) throw new ApiError(401, '会话已变更，请重新连接。');
       const { state, release } = await loadGarden(tx, player);
-      const target = release.version === 1 ? releaseFor(2) : release;
+      const target = currentRelease;
       const action = payload ? validatedAction(payload.action, fastForward, target.content) : null;
       state.fastForward = fastForward;
       if (action) {
@@ -95,7 +102,7 @@ export function createGameService(database, { fastForward = process.env.NODE_ENV
         }
         await saveTransition(tx, { player, release, before, state, now, request: settlement });
       }
-      if (target !== release) await upgradeGardenToV2(tx, state);
+      if (target.version > release.version) await upgradeGarden(tx, state, target.version);
       if (!action) return { state, message: '' };
 
       before = structuredClone(state);

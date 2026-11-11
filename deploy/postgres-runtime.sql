@@ -7,6 +7,7 @@ GRANT INSERT ON windowsill.garden_slots, windowsill.earned_achievements, windows
     windowsill.action_requests, windowsill.accounts TO windowsill_app;
 GRANT UPDATE (result) ON windowsill.action_requests TO windowsill_app;
 GRANT UPDATE (catalog_version) ON windowsill.garden_slots TO windowsill_app;
+GRANT INSERT, UPDATE (units) ON windowsill.material_inventory TO windowsill_app;
 GRANT INSERT (player_id) ON windowsill.wallets TO windowsill_app;
 GRANT INSERT, DELETE ON windowsill.shelf_likes, windowsill.account_sessions TO windowsill_app;
 GRANT USAGE ON SEQUENCE windowsill.leaf_ledger_id_seq TO windowsill_app;

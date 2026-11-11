@@ -47,7 +47,10 @@ export async function loadGarden(tx, player) {
     shelf: [], album: {}, achievements: {}, likes: {},
     stats: { sold: Number(garden.sold_count), displayed: Number(garden.displayed_count) },
     sharing: { visibility: garden.visibility, token: garden.share_token },
+    materialStock: {},
   };
+  const { rows: stock } = await tx.query('SELECT material_key, units FROM windowsill.material_inventory WHERE garden_id=$1', [garden.id]);
+  state.materialStock = Object.fromEntries(stock.map(({ material_key, units }) => [material_key, units]));
   const { rows: slots } = await tx.query('SELECT slot_key FROM windowsill.garden_slots WHERE garden_id = $1', [garden.id]);
   for (const { slot_key } of slots) if (state.slots[slot_key]) state.slots[slot_key].unlocked = true;
   const { rows: plants } = await tx.query(`SELECT p.*, COALESCE(v.is_rare, false) AS rare
@@ -55,7 +58,7 @@ export async function loadGarden(tx, player) {
     WHERE p.garden_id = $1 AND p.sold_at IS NULL ORDER BY p.shelf_position`, [garden.id]);
   for (const row of plants) {
     const specimen = { id: row.id, contentVersion: row.content_version, species: row.species_key, pot: row.pot_key,
-      seed: Number(row.visual_seed), quality: row.quality, rare: row.rare };
+      seed: Number(row.visual_seed), quality: row.quality, rare: row.rare, ...(row.potting && { potting: row.potting }) };
     if (row.shelf_position !== null) state.shelf.push(specimen);
     else if (state.slots[row.slot_key]) state.slots[row.slot_key].plant = {
       ...specimen, moisture: row.moisture, nutrition: row.nutrition, exposure: row.exposure,
@@ -69,19 +72,19 @@ export async function loadGarden(tx, player) {
   return { state, release };
 }
 
-export async function upgradeGardenToV2(tx, state) {
-  await tx.query('UPDATE windowsill.garden_slots SET catalog_version=2 WHERE garden_id=$1', [state.gardenId]);
-  await tx.query('UPDATE windowsill.gardens SET content_version=2, revision=revision+1 WHERE id=$1', [state.gardenId]);
-  state.contentVersion = 2;
+export async function upgradeGarden(tx, state, version) {
+  await tx.query('UPDATE windowsill.garden_slots SET catalog_version=$2 WHERE garden_id=$1', [state.gardenId, version]);
+  await tx.query('UPDATE windowsill.gardens SET content_version=$2, revision=revision+1 WHERE id=$1', [state.gardenId, version]);
+  state.contentVersion = version;
   state.revision++;
 }
 
 async function insertPlant(tx, garden, version, slot, plant, now) {
   await tx.query(`INSERT INTO windowsill.plants
       (id, garden_id, content_version, species_key, pot_key, visual_seed, slot_key, moisture, nutrition,
-       exposure, growth, fit_samples, fit_sum, planted_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [plant.id, garden, version, plant.species, plant.pot,
-    plant.seed, slot, plant.moisture, plant.nutrition, plant.exposure, plant.growth, plant.samples, plant.score, timestamp(now)]);
+       exposure, growth, fit_samples, fit_sum, planted_at, potting)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, [plant.id, garden, version, plant.species, plant.pot,
+    plant.seed, slot, plant.moisture, plant.nutrition, plant.exposure, plant.growth, plant.samples, plant.score, timestamp(now), plant.potting ?? null]);
 }
 
 const slottedPlants = (state) => Object.entries(state.slots).filter(([, { plant }]) => plant).map(([slot, { plant }]) => [slot, plant]);
@@ -89,6 +92,11 @@ const slottedPlants = (state) => Object.entries(state.slots).filter(([, { plant 
 export async function saveTransition(tx, { player, release, before, state, now, request, action }) {
   const { version, content: { ACHIEVEMENTS } } = release;
   const garden = state.gardenId;
+  for (const [key, units] of Object.entries(state.materialStock)) {
+    if (before.materialStock[key] === units) continue;
+    await tx.query(`INSERT INTO windowsill.material_inventory (garden_id, material_key, units) VALUES ($1,$2,$3)
+      ON CONFLICT (garden_id, material_key) DO UPDATE SET units=EXCLUDED.units`, [garden, key, units]);
+  }
   const original = new Map(slottedPlants(before).map(([, plant]) => [plant.id, plant]));
   const currentSlots = slottedPlants(state);
   for (const [slot, value] of Object.entries(state.slots)) {

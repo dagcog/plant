@@ -4,10 +4,11 @@ import { seeded } from '@game/simulation.js';
 import { dispose, material, mesh, segment } from './geometry.js';
 import { cloneStage } from './model-assets.js';
 import { succulentModels } from './succulents.js';
+import { addPotting } from './potting.js';
 
 const up = new T.Vector3(0, 1, 0);
 
-export function makePot(id) {
+export function makePot(id, potting) {
   const style = POTS[id];
   const pot = new T.Group();
   const body = material(style.color, { roughness: id === 'clay' ? 0.86 : 0.36 });
@@ -19,6 +20,7 @@ export function makePot(id) {
   const lip = mesh(pot, new T.TorusGeometry(0.281, 0.019, 8, 40), rim, [0, 0.348, 0]);
   lip.rotation.x = Math.PI / 2;
   mesh(pot, new T.CylinderGeometry(0.263, 0.251, 0.022, 30), soil, [0, 0.315, 0]);
+  if (potting?.mix || potting?.topping) return pot;
   const grit = [material('#745546'), material('#b18b68'), material('#37291e')];
   const stone = new T.IcosahedronGeometry(0.013, 0);
   for (let i = 0; i < 27; i++) {
@@ -89,7 +91,8 @@ function spike(group, tip, radius, surfaces) {
 
 export function makePlant(specimen, stage = 3, onChange = () => {}) {
   const style = SPECIES[specimen.species];
-  const plant = makePot(specimen.pot);
+  const plant = makePot(specimen.pot, specimen.potting);
+  if (specimen.potting) addPotting(plant, specimen.potting, specimen.seed, onChange);
   const quality = specimen.quality ?? 76;
   const stature = 0.75 + quality / 250;
   const succulent = succulentModels.get(style.model);

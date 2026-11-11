@@ -1,4 +1,5 @@
 import { ACHIEVEMENTS, POTS, SHELF_LIMIT, SLOTS, SPECIES } from './content.js';
+import { normalizePotting } from './releases/v3/potting.js';
 
 export const isGardenId = (value) => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value);
 const record = (value) => value && typeof value === 'object' && !Array.isArray(value);
@@ -8,7 +9,8 @@ const count = (value) => Number.isSafeInteger(value) && value >= 0;
 export function validSpecimen(value) {
   return record(value) && typeof value.species === 'string' && Object.hasOwn(SPECIES, value.species)
     && typeof value.pot === 'string' && Object.hasOwn(POTS, value.pot)
-    && typeof value.rare === 'boolean' && count(value.seed) && value.seed <= 0xffffffff;
+    && typeof value.rare === 'boolean' && count(value.seed) && value.seed <= 0xffffffff
+    && normalizePotting(value.potting) !== undefined;
 }
 
 const validMature = (value) => validSpecimen(value) && within(value.quality, 0, 100);

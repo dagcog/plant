@@ -164,11 +164,11 @@ test('旧窗台保留原植株版本并能种齐新多肉、收集成就和分�
 
     now += 90_000;
     const { state: first } = await submit(games, player, { type: 'plant', species: 'bear_paw', pot: 'clay', slot: 'middle' });
-    assert.equal(first.contentVersion, 2);
+    assert.equal(first.contentVersion, 3);
     assert.equal(first.slots.left.plant.id, originalPlant);
     assert.equal(first.slots.left.plant.contentVersion, 1);
     assert.equal(first.slots.left.plant.quality, expectedV1.slots.left.plant.quality);
-    assert.equal(first.slots.middle.plant.contentVersion, 2);
+    assert.equal(first.slots.middle.plant.contentVersion, 3);
     assert.equal(first.coins, expectedV1.coins - 35);
     const { rows: [oldAchievement] } = await database.query("SELECT content_version FROM windowsill.earned_achievements WHERE player_id=$1 AND achievement_key='bloom'", [player]);
     assert.equal(oldAchievement.content_version, 1);
@@ -193,5 +193,55 @@ test('旧窗台保留原植株版本并能种齐新多肉、收集成就和分�
     assert.equal(Number(reward.delta), 24);
     const published = await shelves.get(shared.sharing.token, visitor);
     assert.deepEqual(published.plants.map(({ species }) => species), ['bear_paw', 'haworthia', 'peach_egg']);
+  } finally { await database.close(); }
+});
+
+test('材料购买与配土扣减按请求编号幂等，配方随花架分享', async () => {
+  const database = await openDatabase({ url: '', directory: 'memory://' });
+  try {
+    await migrate(database);
+    let now = startedAt;
+    const auth = createAuthService(database, { clock: () => now });
+    const games = createGameService(database, { clock: () => now });
+    const shelves = createShelfService(database);
+    const { playerId: player } = await auth.ensure({});
+    const { playerId: visitor } = await auth.ensure({});
+    const mix = { coir: 30, compost: 10, perlite: 20, pumice: 40 };
+    const potting = { mix, topping: 'river_stone', drainage: 'clay_pebbles' };
+    const sow = { type: 'plant', slot: 'middle', species: 'haworthia', pot: 'clay', potting };
+
+    for (const invalid of [{ mix: { coir: 95 } }, { mix: { clay_pebbles: 100 } }, { topping: 'clay_pebbles' }]) {
+      await assert.rejects(submit(games, player, { ...sow, potting: invalid }), { status: 400 });
+    }
+    const missing = await submit(games, player, sow);
+    assert.equal(missing.state.coins, 86);
+    assert.equal(missing.state.slots.middle.plant, null);
+    assert.match(missing.message, /库存不足/);
+
+    const purchase = { type: 'buy-material', material: 'coir', price: 0, units: 900 };
+    const receipt = randomUUID();
+    const buys = await Promise.all([submit(games, player, purchase, receipt), submit(games, player, purchase, receipt)]);
+    assert.ok(buys.every(({ state }) => state.coins === 80 && state.materialStock.coir === 100));
+    for (const material of ['compost', 'perlite', 'pumice', 'river_stone', 'clay_pebbles']) {
+      await submit(games, player, { type: 'buy-material', material });
+    }
+    const request = randomUUID();
+    const planted = await submit(games, player, sow, request);
+    const replay = await submit(games, player, sow, request);
+    assert.equal(planted.plantedId, replay.plantedId);
+    assert.equal(replay.state.coins, 4);
+    assert.deepEqual(replay.state.materialStock, { coir: 70, compost: 90, perlite: 80, pumice: 60, river_stone: 0, clay_pebbles: 0 });
+    assert.deepEqual(replay.state.slots.middle.plant.potting, potting);
+    const poor = await submit(games, player, { type: 'buy-material', material: 'gold_grit' });
+    assert.equal(poor.state.coins, 4);
+    assert.equal(poor.state.materialStock.gold_grit, undefined);
+
+    now += 200_000;
+    await submit(games, player, { type: 'display', slot: 'middle', expectedId: planted.plantedId });
+    const { state: published } = await submit(games, player, { type: 'publish', visibility: 'public' });
+    assert.deepEqual(published.shelf[0].potting, potting);
+    const shared = await shelves.get(published.sharing.token, visitor);
+    assert.deepEqual(shared.plants[0].potting, potting);
+    assert.equal(shared.materialStock, undefined);
   } finally { await database.close(); }
 });
